@@ -1,0 +1,487 @@
+// Hey there!
+// This is CODE, lets you control your character with code.
+// If you don't know how to code, don't worry, It's easy.
+// Just set attack_mode to true and ENGAGE!
+// To Do:
+/*
+- finish interaction for attacking
+- set up merchant
+- Group tp to home and run back
+- Auto add party
+- Follow leader (done)
+-monsters that add int - bbpompom, squigtoad, 
+frog, boar, ghost, gscorpion, pppompom, 
+fireroamer, plantoid, phoenix
+
+
+*/
+
+var PARTYARRAY = ["Gibson", "Epiphone"]
+var state = "start"//get("state");
+var SELLARRAY
+var group_mode
+var default_monster
+var current_monster
+var special_targets
+var monster_hunting 
+var hunt_targets 
+var hunt_list
+var just_logged = true;
+var waiting_delay = 0;
+var event_name = false;
+
+function get_global_variables() {
+	SELLARRAY = get("sell_array");
+	group_mode = get("group_mode");
+	default_monster = group_mode ? get("default_monster") : "franky";
+	current_monster = group_mode ? get("current_monster") : ["franky"];
+	special_targets = group_mode ? get("special_targets") : ["squigtoad"];
+	monster_hunting = get("monster_hunting");
+	hunt_targets = get("hunt_targets");
+	hunt_list = get("hunt_list"); //can also do frog
+}
+
+setInterval(function() {
+	if (just_logged) {
+		send_cm(PARTYARRAY,"meet at task");
+		just_logged = false;
+	}
+	
+	check_events();
+	
+	if (event_name) {
+		return;
+	}
+	
+	if (character.rip) {
+		respawn()
+		state = "start";
+		return;
+	}
+	
+	set_message(state);
+
+	get_global_variables();
+	
+	if (state == "start") {
+		waiting_delay = 0;
+		if (group_mode) {
+			if(!monster_hunting){
+				meet_at_town("normal");
+			} else {
+				meet_at_town("hunt");
+				return;
+			}
+		} else {
+			move_to_monster();
+		}
+	}
+	
+	
+	if (state == "waiting for team") {
+		ready_check();
+		return;
+	}
+	
+	if (state == "ready") {
+		set_hunt();	
+		return;
+	}
+	
+	if(state == "meet_at_task") {
+		get_task();
+		return;
+	}
+	
+	if (state == "awaiting orders") {
+		waiting_delay++
+		if (waiting_delay > 500) {//roughly 2 min
+			just_logged = true;
+			state = "start";
+			return;
+		}
+	}
+	
+	if (monster_hunting&& state != "awaiting orders") {
+		
+		check_monsterhunt();
+	}
+	
+	
+	
+	check_speed();
+	check_pots();
+	loot();
+	
+	if (character.rip || state != "attack") return;
+	if (character.items[0].q < 100 || character.items[1].q < 100 || character.esize == 0) {
+		trip_to_town(true)
+		return;
+	}
+	
+	//check_mental_burst(); requires int64
+	
+	if (state=="attack") {
+		attack_pattern();
+		if (group_mode) {
+			follow_leader();
+		}
+	}	
+	
+}, 1000 / 4); // Loops every 1/4 seconds.
+
+// Event Interval
+setInterval(function() {
+	if (!event_name)	return;
+	if (character.rip) {
+		respawn()
+		return;
+	}
+	if (state == "moving") {
+		return;
+	}
+	follow_leader();
+	attack_pattern()
+	state = "start";
+}, 1000/4);
+
+function check_monsterhunt() {
+	var no_hunt_count = 0;
+	if (character.s.monsterhunt) {
+		if (character.s.monsterhunt.c == 0) {
+		set("hunt_targets", [get("hunt_targets")[0], get("hunt_targets")[1], "completed"]);
+		} else	if (character.s.monsterhunt.id != get("hunt_targets")[2]) {
+			set("hunt_targets", [get("hunt_targets")[0], get("hunt_targets")[1], character.s.monsterhunt.id]);
+		}
+	} else if (get("hunt_targets")[2] != "none") {
+		set("hunt_targets", [get("hunt_targets")[0], get("hunt_targets")[1], "none"]);
+	} for (var i in get("hunt_targets")) {
+		if (get("hunt_targets")[i] == "completed" && !smart.moving  ){
+			game_log("completed");
+			state = "start";
+			return;
+		}
+	}
+	for (var i in get("hunt_targets")) {
+		if (get("hunt_targets")[i] == "none") {
+			no_hunt_count++;
+		}
+		if (hunt_list.includes(get("hunt_targets")[i])) {
+			current_monster[0] = get("hunt_targets")[i]
+			set("current_monster",[get("hunt_targets")[i]]);
+			return;
+		}
+	}
+	if (no_hunt_count > 0 && !smart.moving) {
+		state = "start";
+		game_log(state);
+	} else if (no_hunt_count == 0) {
+		if (current_monster[0] != default_monster) {
+			current_monster[0] = default_monster;
+			state = "start";
+		}
+	}
+}
+
+function set_hunt() {
+	if(character.s.monsterhunt) {
+		set("hunt_targets", [get("hunt_targets")[0], get("hunt_targets")[1], character.s.monsterhunt.id]);
+	}
+	state = "waiting for team";
+}
+
+function meet_at_town(task) {
+	state = "moving";
+	smart_move({to:"exchange"}, function(done) {
+		if (task == "hunt") {
+			interact("monsterhunt");
+		} if (character.s.monsterhunt) {
+			if (character.s.monsterhunt.c == 0 ) {
+				state = "meet_at_task";
+				set("hunt_targets", [get("hunt_targets")[0], get("hunt_targets")[1], "none"]);
+				} else {
+				state = "ready";
+			}
+		} else {
+			state = "ready";
+		}
+	});
+}
+
+function get_task() {
+	interact("monsterhunt");
+	state = "ready";
+}
+
+function ready_check() {
+	send_cm("Epiphone","ready");
+	state = "awaiting orders";
+}
+
+function move_to_monster() {
+	state = "moving";
+	smart_move(current_monster[0]
+		, function(done) {
+			state = "attack";
+		});
+}
+
+function trip_to_town(send_message) {
+	state = "moving"
+	if (group_mode && send_message) {
+		send_cm(PARTYARRAY, "meet at task");
+	}
+	var x = character.real_x,
+		y = character.real_y,
+		map = character.map;
+	smart_move({
+		to: "potions"
+	}, function(done) {
+		var hpots = character.items[0].q
+		var mpots = character.items[1].q
+		if (hpots < 8000) {
+			buy("hpot1", 8000 - hpots);
+		}
+		if (mpots < 8000) {
+			buy("mpot1", 8000 - mpots);
+		}
+		for (var i = 2; i < 43; i++) {
+			if (character.items[i]) {
+				if (SELLARRAY.includes(character.items[i].name)) {
+					sell(i, character.items[i].q);
+				}
+			}
+		}
+
+		smart_move({
+			to: "bank"
+		}, function(done) {
+			if (character.gold > 2000000) {
+				bank_deposit(character.gold - 2000000);
+			}
+			store_items();
+			if (group_mode) {
+				meet_at_town("normal");
+			} else {
+				game_log("Got the potions!", "#4CE0CC");
+				smart_move({
+					x: x,
+					y: y,
+					map: map
+				}, function(done) {
+				state = "start"});
+			}
+		});
+	});
+}
+
+function store_items() {
+	for (var i = 3; i < character.isize; i++) {
+		if (character.items[i]) {
+			let current_item = character.items[i];
+			if (current_item.q) {
+				bank_store(i, "items1");
+			} else if (is_compoundable(i)) {
+				bank_store(i, "items3");
+			} else if (is_upgradeable(i)) {
+				if (G.items[current_item.name].type == "weapon") {
+					bank_store(i, "items0");
+				} else {
+					bank_store(i, "items2");
+				}
+			}
+			bank_store(i, "items4");
+		}
+	}
+}
+
+function attack_pattern() {
+	var target = get_targeted_monster();
+	
+	if (!target) {
+		if (group_mode) {
+			if (group_mode) {
+				if(get_player("Gibson")) {
+					target = get_target_of(get_player("Gibson"));
+					if (target) {
+						change_target(target);
+						return;
+					}
+				}
+			}
+		} else {
+			for (i in current_monster){
+				target = get_nearest_monster({type: current_monster[i]});
+				if (target) {
+					change_target(target);
+					break;
+				}
+			}
+		}
+	} else {
+		if (target.name == "Target Automatron") {
+			log("Target Automatron found, changing targets");
+			change_target(null);
+		}
+		if (!current_monster.includes(target.mtype) && !special_targets.includes(target.mtype)) {
+				change_target(null);
+				return;
+			
+		}
+		if (!is_in_range(target)) {
+			move(
+				character.x + (target.x - character.x) / 2,
+				character.y + (target.y - character.y) / 2
+			);
+			// Walk half the distance
+		} else {
+			if (can_attack(target)) {
+				attack(target);	
+			}
+		}
+	}
+}
+
+function get_distance_from(entityName) {
+	var entity = get_entity(entityName);
+	var distance = Math.abs(entity.x - character.x) + Math.abs(entity.y - character.y)
+	return distance;
+}
+
+function follow_leader() {
+	var leader = get_player("Gibson");
+		if (leader) {
+			if(get_distance_from("Gibson") > 250) {
+			state = "moving"
+			smart_move({
+				x: leader.real_x,
+				y: leader.real_y,
+				map: leader.map
+			}, function(done) {
+				state = "attack"
+			});
+		} else if (get_distance_from("Gibson") > 160) {
+			move(
+				character.x + (leader.x - character.x) / 2,
+				character.y + (leader.y - character.y) / 2
+			);
+		}
+	}
+}
+
+//requires int 64
+function check_mental_burst() {
+	if (is_on_cooldown("mentalburst") || character.mp < 180) {
+		return;	
+	}
+	var target = get_targeted_monster();
+	if (target) {
+		if(is_in_range(target,"mentalburst")) {
+				
+		}
+	}
+}
+
+function check_pots() {
+	if (character.mp < 100 && !is_on_cooldown("use_mp")) {
+		use("use_mp");
+	} else if (character.hp < character.max_hp - 400 && !is_on_cooldown("use_hp")) {
+		use("use_hp");
+	} else if (character.mp < character.max_mp - 500 && !is_on_cooldown("use_mp")) {
+		use("use_mp");
+	}
+}
+
+function check_speed() {
+	var gibson = get_player("Gibson");
+	var epiphone = get_player("Epiphone");
+	if (character.mp >= 320) {
+		if (gibson) {
+			if (!gibson.s.rspeed && is_in_range(gibson,"rspeed")) {
+				
+				use_skill("rspeed", gibson);
+				return;
+			}
+		}
+		if (epiphone) {
+			if (!epiphone.s.rspeed && is_in_range(epiphone,"rspeed")) {
+				use_skill("rspeed", epiphone);
+				return;
+			}
+		}
+		if (!character.s.rspeed) {
+			use_skill("rspeed", character);
+			return;
+		}
+	}
+}
+
+function is_compoundable(invSlot) {
+	let compItem = character.items[invSlot];
+	return G.items[compItem.name].compound;
+}
+
+function is_upgradeable(invSlot) {
+	let compItem = character.items[invSlot];
+	return G.items[compItem.name].upgrade;
+}
+
+function on_party_invite(name) {
+	if (PARTYARRAY.includes(name)) {
+		accept_party_invite(name);
+	}
+}
+
+function on_cm(name, data) {
+	if (data == "return to town") {
+		trip_to_town(false);
+		message_received = true;
+	} else if (data == "meet at task") {
+		state = "start";
+	}  else if (name == "Epiphone" && group_mode == true && get_player("Epiphone")) { 
+		cruise(get_player("Epiphone").speed);
+		state = "moving";
+		smart_move(data,function(done) {
+			state="attack";
+			cruise(500);
+		});
+	}
+}
+
+character.on("stacked",function(data){
+	move(character.x - 5,character.y - 5);
+});
+	
+function check_events() {
+	if(parent.S.franky && !get_nearest_monster({type:'franky'})){
+		join('franky');
+		event_name = "franky";
+		smart.moving = false;
+		return;
+	}
+	if(parent.S.abtesting && character.map!="abtesting"){
+		join('abtesting');
+		event_name = "abtesting";
+		smart.moving = false;
+		return;
+	}
+	if(parent.S.abtesting &&  !get_nearest_monster({type:'snowman'})){
+		join('snowman');
+		event_name = "snowman";
+		smart.moving = false;
+		return;
+	}
+	
+	
+	if(event_name) {
+		if(character.map!=event_name && !get_nearest_monster({type:event_name})) {
+		   	event_name = false;
+			state = "start";
+		}
+	}
+}
+
+
+
+// Learn Javascript: https://www.codecademy.com/learn/introduction-to-javascript
+// Write your own CODE: https://github.com/kaansoral/adventureland
