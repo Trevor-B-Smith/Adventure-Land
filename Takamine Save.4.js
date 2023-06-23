@@ -6,9 +6,11 @@ var state = "start"
 var max_compound = 3;
 var max_upgrade = 6;
 var deposit_count = 0;
-var do_not_upgrade_list = ["firestaff","ololipop","glolipop","throwingstars","basher"];
+var do_not_upgrade_list = ["firestaff","ololipop","glolipop","throwingstars","basher","angelwings"];
 var exchange_list = ["gem0","gem1","armorbox","weaponbox","mistletoe","candy1","candy0","candycane","gift0","gift1"];
+var upgrade_single_item = false;
 //var all_functions(bank_check(),deposit_merch_items(),store_items(),grab_compound(0),compound_items(0),grab_compound(1),compound_items(1),grab_compound(2),compound_items(2),
+if (!upgrade_single_item) {
 setInterval(() => {
 
 	use_pots();
@@ -134,7 +136,7 @@ setInterval(() => {
 setInterval(() => {
 	bank_check();
 }, 3600000); // Loops every hour.
-/*
+} else {
 setInterval(() => {
 	if(character.items[0].q < 100) {
 		buy("scroll0", 250 - character.items[0].q);
@@ -154,15 +156,14 @@ setInterval(() => {
 		var coat = character.items[5];
 		if (coat.level < 7) {
 			upgrade(5,0);
-		} else if (coat.level = 7) {
+		} else if (coat.level == 7) {
 			upgrade(5,2);
 		} else if (coat.level > 7) {
-			show_json(coat);
 			if (character.items[6]) {
 				var pants = character.items[6];
 				if (pants.level < 7) {
 					upgrade(6,0);
-				} else if (pants.level = 7) {
+				} else if (pants.level == 7) {
 					upgrade(6,2);
 				} else if (pants.level > 7) {
 					return;
@@ -175,8 +176,7 @@ setInterval(() => {
 		buy("gloves");
 	}
 }, 1000/2);
-
-*/
+}
 function bank_check() {
 	close_stand();
 	state = "moving"

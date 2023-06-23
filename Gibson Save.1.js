@@ -38,26 +38,15 @@ function get_global_variables() {
 	hunt_list = get("hunt_list"); //can also do frog
 }
 
+load_code("fighter default"); // standard functions and interval
+
 setInterval(function() {
-	if (just_logged) {
-		send_cm(PARTYARRAY,"meet at task");
-		just_logged = false;
-	}
-	
-	check_events();
 	
 	if (event_name) {
 		return;
 	}
 	
-	set_message(state);
-	
-	if (character.rip) {
-		respawn()
-		state = "start";
-		return;
-	}
-	get_global_variables();
+	check_events();
 	
 	if (state == "start") {
 		waiting_delay = 0;
@@ -104,14 +93,8 @@ setInterval(function() {
 	if(state == "town" && !is_on_cooldown("charge")) {
 		//use_skill("charge");
 	}
-	check_pots();
-	loot();
 
 	if (character.rip || state != "attack") return;
-	if (character.items[0].q < 100 || character.items[1].q < 100 || character.esize == 0) {
-		trip_to_town(true)
-		return;
-	}
 	
 	attack_pattern();
 	if (group_mode) {
@@ -128,22 +111,17 @@ setInterval(function() {
 // Event Interval
 setInterval(function() {
 	if (!event_name)	return;
-	if (character.rip) {
-		respawn()
-		return;
-	}
-	if (state == "moving") {
-		return;
-	}
+	if (state == "moving") 	return;
 	attack_pattern()
 	state = "start";
+	check_events();
 }, 1000/4);
 
 setInterval(function() {
 	send_party_invites();
 }, 60000); // Loops every minute
 
-function check_monsterhunt() {
+function check_monsterhunt() { //get hunt targets as var and set targets[i] then set the localstorage
 	var no_hunt_count = 0;
 	if (character.s.monsterhunt) {
 		if (character.s.monsterhunt.c == 0) {
@@ -223,75 +201,6 @@ function move_to_monster() {
 		, function(done) {
 			state = "attack";
 		});
-}
-
-function trip_to_town(send_message) {
-	state = "moving"
-	if (group_mode && send_message) {
-		send_cm(PARTYARRAY, "meet at task");
-	}
-	var x = character.real_x,
-		y = character.real_y,
-		map = character.map;
-	smart_move({
-		to: "potions"
-	}, function(done) {
-		var hpots = character.items[0].q
-		var mpots = character.items[1].q
-		if (hpots < 8000) {
-			buy("hpot1", 8000 - hpots);
-		}
-		if (mpots < 8000) {
-			buy("mpot1", 8000 - mpots);
-		}
-		for (var i = 2; i < 43; i++) {
-			if (character.items[i]) {
-				if (SELLARRAY.includes(character.items[i].name)) {
-					sell(i, character.items[i].q);
-				}
-			}
-		}
-
-		smart_move({
-			to: "bank"
-		}, function(done) {
-			if (character.gold > 2000000) {
-				bank_deposit(character.gold - 2000000);
-			}
-			store_items();
-			if (group_mode) {
-				meet_at_town("normal");
-			} else {
-				game_log("Got the potions!", "#4CE0CC");
-				smart_move({
-					x: x,
-					y: y,
-					map: map
-				}, function(done) {
-				state = "start"});
-			}
-		});
-	});
-}
-
-function store_items() {
-	for (var i = 3; i < character.isize; i++) {
-		if (character.items[i]) {
-			let current_item = character.items[i];
-			if (current_item.q) {
-				bank_store(i, "items1");
-			} else if (is_compoundable(i)) {
-				bank_store(i, "items3");
-			} else if (is_upgradeable(i)) {
-				if (G.items[current_item.name].type == "weapon") {
-					bank_store(i, "items0");
-				} else {
-					bank_store(i, "items2");
-				}
-			}
-			bank_store(i, "items4");
-		}
-	}
 }
 
 function attack_pattern() {
@@ -383,12 +292,6 @@ function check_taunt() {
 		}
 }
 
-function get_distance_from(entityName) {
-	var entity = get_entity(entityName);
-	var distance = Math.abs(entity.x - character.x) + Math.abs(entity.y - character.y)
-	return distance;
-}
-
 function send_party_invites() {
   if(!get_party()["Draxious"]) {
     //send_party_request("earthWar");
@@ -400,16 +303,6 @@ function send_party_invites() {
   if(!get_party()["Carvin"]) {
     send_party_invite("Carvin");
   }
-}
-
-function check_pots() {
-	if (character.mp < 100 && !is_on_cooldown("use_mp")) {
-		use("use_mp");
-	} else if (character.hp < character.max_hp - 400 && !is_on_cooldown("use_hp")) {
-		use("use_hp");
-	} else if (character.mp < character.max_mp - 500 && !is_on_cooldown("use_mp")) {
-		use("use_mp");
-	}
 }
 
 function check_hardshell() {
@@ -439,29 +332,6 @@ function check_charge() {
 function check_warcry() {
 	if (!is_on_cooldown("warcry")) {
 		use_skill("warcry");
-	}
-}
-
-function is_compoundable(invSlot) {
-	let compItem = character.items[invSlot];
-	return G.items[compItem.name].compound;
-}
-
-function is_upgradeable(invSlot) {
-	let compItem = character.items[invSlot];
-	return G.items[compItem.name].upgrade;
-}
-
-function on_party_invite(name) {
-	if (PARTYARRAY.includes(name) || name == "Sacerdos") {
-		accept_party_invite(name);
-	}
-}
-
-function on_magiport(name) {
-	if (name == "Yamaha") {
-		state="attack"
-		accept_magiport("Yamaha");
 	}
 }
 
@@ -495,16 +365,25 @@ function check_events() {
 		smart.moving = false;
 		return;
 	}
-	if(parent.S.abtesting &&  !get_nearest_monster({type:'snowman'})){
+	if(parent.S.snowman &&  !get_nearest_monster({type:'snowman'})){
 		join('snowman');
 		event_name = "snowman";
-		smart.moving = false;
+		state = "moving";
+		smart_move("arcticbee",function(done) {
+			state = "start";
+		});
+		return;
+	}
+	
+	if(parent.S.goobrawl && character.map!="goobrawl"){
+		join('goobrawl');
+		event_name = "goobrawl";
 		return;
 	}
 	
 	
 	if(event_name) {
-		if(character.map!=event_name && !get_nearest_monster({type:event_name})) {
+		if(!parent.S.goobrawl && !parent.S.snowman && !parent.S.abtesting & !parent.S.franky) {
 		   	event_name = false;
 			state = "start";
 		}

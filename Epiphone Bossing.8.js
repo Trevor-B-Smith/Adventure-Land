@@ -1,244 +1,14 @@
 
-/*
-event times: 
-1 - eastland
-7 - europas 1
-8 - eastland
-11 - eastland
-13 - us 1
-14 - europas 1
-17 - europas 1
-20 - us 1
-23 - us 1
-	if(parent.S.franky && !get_nearest_monster({type:'franky'}))
-		join('franky');
-		if(parent.S.abtesting && character.map!="abtesting")
-		join('abtesting');
-		
-JSON.parse(localStorage.sell_array)
-*/
-
-
-var PARTYARRAY = ["Gibson", "Carvin"];
-var state = "start";
-var SELLARRAY = ["ringsj", "vitring", "hpbelt", "hpamulet", "wgloves","wshoes", "wcap", "wbreeches", "wshoes", "wshield", "wattire","beewings","frogt","vitscroll","smush","sstinger","carrot","lspores","mushroomstaff","swifty"];
-var group_mode = true;
-var default_monster = "plantoid";
-var current_monster = ["plantoid"];
-var special_targets = ["mvampire","phoenix","goldenbat","tinyp","cutebee","frog","greenjr","jr","snowman","franky"];
-var step_counter = 0;
-var ready_counter = 0;
-var monster_hunting = true;
-var hunt_targets = ["none","none","none"];
-var hunt_list = ["goo","bee","crab","crabx","minimush","snake","rat","squig","arcticbee","armadillo","bat","croc","iceroamer","poisio","tortoise","squigtoad","spider","scorpion","bbpompom","ghost","frog","stoneworm","gscorpion","boar","cgoo","plantoid","xscorpion","greenjr","jr","mvampire","phoenix","gscorpion"];
-var did_set_global_variables = false;
-var just_logged = true;
-var kiting = false;
-var waiting_delay = 0;
-var event_name = false;
-
-
-function set_global_variables() {
-	set("sell_array", SELLARRAY);
-	set("group_mode", group_mode);
-	set("default_monster", default_monster);
-	set("current_monster", current_monster);
-	set("special_targets", special_targets);
-	set("monster_hunting", monster_hunting);
-	set("hunt_targets", hunt_targets);
-	set("hunt_list", hunt_list);
-	
-	did_set_global_variables = true
-}
-
-function get_global_variables() {
-	SELLARRAY = get("sell_array");
-	group_mode = get("group_mode");
-	default_monster = group_mode ? get("default_monster") : default_monster
-	current_monster = group_mode ? get("current_monster") : current_monster
-	special_targets = group_mode ? get("special_targets") : special_targets
-	monster_hunting = get("monster_hunting");
-	hunt_targets = get("hunt_targets");;
-	hunt_list = get("hunt_list"); //can also do frog
-}
 
 setInterval(function() {
-	if (just_logged) {
-		send_cm(PARTYARRAY,"meet at task");
-		just_logged = false;
-	}
 	
-	check_events();
-	
-	if (event_name) {
-		return;
-	}
-	
-	set_message(state);
-	
-	if (character.rip) {
-		respawn()
-		state = "start";
-		return;
-	}
-	
-	if (!did_set_global_variables) {
-		set_global_variables();
-		return;
-	} 
-	
-	get_global_variables()
-	check_heal();
-	check_partyheal();
-	
-	if (state == "ready") {
-		move_to_monster();
-		return;
-	}
-	
-	if (state == "waiting for team" && !smart.moving) {
-		waiting_delay++
-		if (waiting_delay > 500) {//roughly 2 min
-			just_logged = true;
-			state = "start";
-			return;
-		}
-		ready_check();
-		set_hunt();
-		return;
-	}
-	
-	if (state == "preparing group") {
-		send_location_to_group();
-		return;
-	}
+	if (state = "finding boss") {
 
-	if (state == "start") {
-		waiting_delay = 0;
-		if (group_mode) {
-			if(!monster_hunting){
-				meet_at_town("normal");
-			} else {
-				meet_at_town("hunt");
-				return;
-			}
-		} else {
-			move_to_monster();
-		}
 	}
-	
-	if(state == "meet_at_task") {
-		get_task()
-		return;
-	}
-	
-	if (monster_hunting) {
-		check_monsterhunt();
-	} 
-	
-	check_pots();
-	loot();
-
-	if (character.rip || state != "attack") return;
-	if (character.items[0].q < 100 || character.items[1].q < 100 || character.esize == 0) {
-		trip_to_town(true)
-		return;
-	}
-		
-	if (state=="attack") {
-		attack_pattern();
-		if (group_mode) {
-			follow_leader();
-		}
-	}
-	
-	check_curse();
-	//check_darkblessing(); requires lvl 70
-	
-	
 }, 1000 / 4); // Loops every 1/4 seconds.
 
-//Event Interval
-setInterval(function() {
-	if (!event_name)	return;
-	if (character.rip) {
-		respawn()
-		return;
-	}
-	if (state == "moving") {
-		return;
-	}
-	follow_leader();
-	attack_pattern()
-	state = "start";
-}, 1000/4);
 
-function check_monsterhunt() {
-	var no_hunt_count = 0;
-	if (character.s.monsterhunt) {
-		if (character.s.monsterhunt.c == 0) {
-		set("hunt_targets", ["completed", get("hunt_targets")[1], get("hunt_targets")[2]]);
-		} else if (character.s.monsterhunt.id != get("hunt_targets")[0]) {
-			set("hunt_targets", [character.s.monsterhunt.id, get("hunt_targets")[1], get("hunt_targets")[2]]);
-		}
-	} else if (get("hunt_targets")[0] != "none") {
-		set("hunt_targets", ["none", get("hunt_targets")[1], get("hunt_targets")[2]]);
-	} for (var i in get("hunt_targets")) {
-		if (get("hunt_targets")[i] == "completed" && !smart.moving ){
-			state = "start";
-			return;
-		}
-	}
-	for (var i in get("hunt_targets")) {
-		if (get("hunt_targets")[i] == "none") {
-			no_hunt_count++;
-		}
-		if (hunt_list.includes(get("hunt_targets")[i])) {
-			current_monster[0] = get("hunt_targets")[i]
-			set("current_monster",[get("hunt_targets")[i]]);
-			return;
-		}
-	}
-	if (no_hunt_count > 0 && !smart.moving && state != "waiting for team") {
-		state = "start";
-		game_log(state)
-	} else if (no_hunt_count == 0) {
-		if (current_monster[0] != default_monster) {
-			current_monster[0] = default_monster;
-			set("current_monster",[default_monster]);
-			state = "start";
-		}
-	}
-}
-
-function set_hunt() {
-	if(character.s.monsterhunt) {
-		set("hunt_targets", [character.s.monsterhunt.id, get("hunt_targets")[1], get("hunt_targets")[2]]);
-	}
-}
-
-function meet_at_town(task) {
-	state = "moving";
-	smart_move({to:"exchange"}, function(done) {
-		if (task == "hunt") {
-			interact("monsterhunt");
-		} if (character.s.monsterhunt) {
-			if (character.s.monsterhunt.c == 0 ) {
-				state = "meet_at_task";
-				set("hunt_targets", ["none", get("hunt_targets")[1], get("hunt_targets")[2]]);
-				return;
-			}
-		}
-		state = "waiting for team";
-	});
-}
-
-function get_task() {
-	interact("monsterhunt");
-	state = "ready";
-}
-
-function move_to_monster() {
+function move_to_boss() {
 	var monster
 	if (group_mode) {
 		state = "preparing group";	
@@ -596,16 +366,28 @@ function check_events() {
 		smart.moving = false;
 		return;
 	}
-	if(parent.S.abtesting &&  !get_nearest_monster({type:'snowman'})){
+	if(parent.S.snowman &&  !get_nearest_monster({type:'snowman'})){
 		join('snowman');
 		event_name = "snowman";
-		smart.moving = false;
+		state = "moving";
+		smart_move("arcticbee",function(done) {
+			state = "start";
+		});
 		return;
+	}
+	if(parent.S.goobrawl && character.map!="goobrawl"){
+		join('goobrawl');
+		event_name = "goobrawl";
+		return;
+	}
+	if(parent.S.crabxx && !get_nearest_monster({type:'crabxx'})){
+		join('crabxx');
+		event_name = "crabxx";
 	}
 	
 	
 	if(event_name) {
-		if(character.map!=event_name && !get_nearest_monster({type:event_name})) {
+		if(!parent.S.goobrawl && !parent.S.snowman && !parent.S.abtesting && !parent.S.franky && !parent.S.crabxx) {
 		   	event_name = false;
 			state = "start";
 		}
