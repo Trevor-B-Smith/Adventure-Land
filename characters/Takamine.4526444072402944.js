@@ -1,12 +1,13 @@
 //Merchant Code
 //Finish Compounding the other times
+//Store scrolls correctly by checking again with storing compoundable
 var PARTYARRAY = [] //"Gibson", "Fender", "Yamaha"]
 var shop_open = true
 var state = "start"
 var max_compound = 3;
 var max_upgrade = 6;
 var deposit_count = 0;
-var do_not_upgrade_list = ["firestaff","ololipop","glolipop","throwingstars","basher","angelwings"];
+var do_not_upgrade_list = ["firestaff","ololipop","glolipop","throwingstars","basher","angelwings","rod","pickaxe","maceofthedead","basher","bowofthedead","staffofthedead","swordofthedead","pmaceofthedead","spearofthedead"];
 var exchange_list = ["gem0","gem1","armorbox","weaponbox","mistletoe","candy1","candy0","candycane","gift0","gift1"];
 var upgrade_single_item = false;
 //var all_functions(bank_check(),deposit_merch_items(),store_items(),grab_compound(0),compound_items(0),grab_compound(1),compound_items(1),grab_compound(2),compound_items(2),
@@ -124,11 +125,11 @@ setInterval(() => {
 	}
 	
 	if (state == "check_scrolls") {
-		check_scrolls();
+		state = "selling";//check_scrolls();
 	}
 	
 	if (state != "selling") return;
-	
+	character.tax = 0;
 	//check_scrolls();
 }, 1000); // Loops every 1 seconds.
 
@@ -197,33 +198,37 @@ function use_pots() {
 	}
 }
 
-function deposit_merch_items() {
+function deposit_merch_items(change_state = true) {
 	var merch_items = [locate_item("scroll0"), locate_item("cscroll0"), locate_item("scroll1"), locate_item("cscroll1"), locate_item("stand0")];
 	for (i in merch_items) {
 		bank_store(merch_items[i], "items5", i);
 	}
-	state = "deposit_items";
+	if (change_state) {
+		state = "deposit_items";
+	}
 }
 
 function store_items() {
-	var merch_items = [locate_item("scroll0"), locate_item("cscroll0"), locate_item("scroll1"), locate_item("cscroll1"), locate_item("stand0")];
+	var merch_item_names = ["scroll0","cscroll0","scroll1","cscroll1","stand0"];
 	for (var i = 0; i < character.isize; i++) {
 		if (character.items[i]) {
-			let current_item = character.items[i];
-			if (current_item.q) {
-				if (!merch_items.includes(current_item.name)) { 
-					bank_store(i, "items1");
+			if (merch_item_names.includes(character.items[i].name)) {
+				deposit_merch_items(false);
+			} else {
+				let current_item = character.items[i];
+				if (current_item.q) {					 
+					bank_store(i, "items1");					
+				} else if (is_compoundable(i)) {
+					bank_store(i, "items3");
+				} else if (is_upgradeable(i)) {
+					if (G.items[current_item.name].type == "weapon") {
+						bank_store(i, "items0");
+					} else {
+						bank_store(i, "items2");
+					}
 				}
-			} else if (is_compoundable(i)) {
-				bank_store(i, "items3");
-			} else if (is_upgradeable(i)) {
-				if (G.items[current_item.name].type == "weapon") {
-					bank_store(i, "items0");
-				} else {
-					bank_store(i, "items2");
-				}
+				bank_store(i, "items4");
 			}
-			bank_store(i, "items4");
 		}
 	}
 	switch (deposit_count) {
@@ -332,7 +337,7 @@ function grab_upgrade(type="armour",grade=0) {
 	if (type=="armour") {
 		for(var i in character.bank["items2"]) {
 			if (character.bank["items2"][i]) {
-				if (item_grade(character.bank["items2"][i]) == grade && !character.bank["items2"][i].p && !character.bank["items2"][i].l && !do_not_upgrade_list.includes(character.bank["items2"][i].name) && G.items[character.bank["items2"][i].name].tier < 3) {
+				if (item_grade(character.bank["items2"][i]) == grade && !character.bank["items2"][i].p && !character.bank["items2"][i].l && !do_not_upgrade_list.includes(character.bank["items2"][i].name) && (G.items[character.bank["items2"][i].name].tier ? G.items[character.bank["items2"][i].name].tier < 3 : true)) {
 					bank_retrieve("items2",i);
 				}
 			}
@@ -410,6 +415,13 @@ function grab_exchange() {
 		if (character.bank["items1"][i]) {
 			if (exchange_list.includes(character.bank["items1"][i].name)) {
 				bank_retrieve("items1",i);
+			}
+		}
+	}
+	for(var i in character.bank["items4"]) {
+		if (character.bank["items4"][i]) {
+			if (exchange_list.includes(character.bank["items4"][i].name)) {
+				bank_retrieve("items4",i);
 			}
 		}
 	}

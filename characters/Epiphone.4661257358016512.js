@@ -4,6 +4,9 @@
 // Just set attack_mode to true and ENGAGE!
 // To Do:
 /*
+show dps
+show_json(character.attack * character.frequency * damage_multiplier(500 - (2 * character.apiercing)) * (1 + (character.crit / 100) * (1 + (character.critdamage) / 100)))
+
 event times: 
 1 - eastland
 7 - europas 1
@@ -20,14 +23,14 @@ event times:
 		join('abtesting');
 		
 JSON.parse(localStorage.sell_array)
-
+remove get_global_variables from all defaults and put in each one.
 test
 */
 
 
 var PARTYARRAY = ["Gibson", "Carvin"];
 var state = "start";
-var SELLARRAY = ["ringsj", "vitring", "hpbelt", "hpamulet", "wgloves","wshoes", "wcap", "wbreeches", "wshoes", "wshield", "wattire","beewings","frogt","vitscroll","smush","sstinger","carrot","lspores","mushroomstaff","swifty"];
+var SELLARRAY = ["ringsj", "vitring", "hpbelt", "hpamulet", "wgloves","wshoes", "wcap", "wbreeches", "wshoes", "wshield", "wattire","beewings","frogt","vitscroll","smush","sstinger","carrot","lspores","mushroomstaff","swifty","rattail","dstones","vitearring"];
 var group_mode = true;
 var default_monster = "bbpompom";
 var current_monster = ["bbpompom"];
@@ -36,7 +39,7 @@ var step_counter = 0;
 var ready_counter = 0;
 var monster_hunting = true;
 var hunt_targets = ["none","none","none"];
-var hunt_list = ["goo","bee","crab","crabx","minimush","snake","rat","squig","arcticbee","armadillo","bat","croc","iceroamer","poisio","tortoise","squigtoad","spider","scorpion","bbpompom","ghost","frog","stoneworm","gscorpion","boar","cgoo","plantoid","xscorpion","greenjr","jr","mvampire","phoenix","gscorpion"];
+var hunt_list = ["goo","bee","crab","crabx","minimush","snake","rat","squig","arcticbee","armadillo","bat","croc","iceroamer","poisio","tortoise","squigtoad","spider","scorpion","bbpompom","ghost","frog","stoneworm","gscorpion","boar","cgoo","plantoid","xscorpion","greenjr","jr","mvampire","phoenix","gscorpion","wolfie"];
 var did_set_global_variables = false;
 var just_logged = true;
 var bossing = false;
@@ -83,6 +86,8 @@ setInterval(function() {
 		set_global_variables();
 		return;
 	} 
+
+	get_global_variables();
 	
 	check_heal();
 	check_partyheal();
@@ -133,10 +138,6 @@ setInterval(function() {
 	} 
 
 	if (character.rip || state != "attack") return;
-	if (character.items[0].q < 100 || character.items[1].q < 100 || character.esize == 0) {
-		trip_to_town(true)
-		return;
-	}
 		
 	if (state=="attack") {
 		attack_pattern();
@@ -362,7 +363,7 @@ function strafe() {
 function follow_leader() {
 	var leader = get_player("Gibson");
 		if (leader) {
-			if(get_distance_from("Gibson") > 250) {
+			if(get_distance_from("Gibson") > 250 && !smart.moving) {
 			state = "moving"
 			smart_move({
 				x: leader.real_x,
@@ -451,10 +452,7 @@ function ready_check() {
 }
 
 function on_cm(name, data) {
-	if (data == "return to town") {
-		trip_to_town(false);
-		message_received = true;
-	} else if (data == "meet at task") {
+	if (data == "meet at task") {
 		state = "start";
 	} else if (data == "ready") {
 		ready_counter++;
@@ -469,6 +467,7 @@ character.on("stacked",function(data){
 });
 
 function check_events() {
+	if (smart.moving) return;
 	if(parent.S.franky && !get_nearest_monster({type:'franky'})){
 		join('franky');
 		event_name = "franky";

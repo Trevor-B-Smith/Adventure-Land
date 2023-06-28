@@ -42,6 +42,8 @@ load_code("fighter default"); // standard functions and interval
 
 setInterval(function() {
 	
+	get_global_variables();
+	
 	if (event_name) {
 		return;
 	}
@@ -337,10 +339,7 @@ function check_warcry() {
 
 function on_cm(name, data) {
 	game_log("message received");
-	if (data == "return to town") {
-		trip_to_town(false);
-		message_received = true;
-	} else if (data == "meet at task") {
+	if (data == "meet at task") {
 		state = "start";
 	} else if (name == "Epiphone" && group_mode == true && get_player("Epiphone")) { 
 		cruise(get_player("Epiphone").speed + 1);

@@ -9,15 +9,12 @@
 - Group tp to home and run back
 - Auto add party
 - Follow leader (done)
--monsters that add int - bbpompom, squigtoad, 
-frog, boar, ghost, gscorpion, pppompom, 
-fireroamer, plantoid, phoenix
 
 
 */
 
-var PARTYARRAY = ["Gibson", "Epiphone"]
-var state = "start"//get("state");
+var PARTYARRAY = ["Carvin", "Epiphone"]
+var state = "attack"
 var SELLARRAY
 var group_mode
 var default_monster
@@ -25,7 +22,7 @@ var current_monster
 var special_targets
 var monster_hunting 
 var hunt_targets 
-var hunt_list
+var hunt_list 
 var just_logged = true;
 var waiting_delay = 0;
 var event_name = false;
@@ -37,13 +34,15 @@ function get_global_variables() {
 	current_monster = group_mode ? get("current_monster") : ["franky"];
 	special_targets = group_mode ? get("special_targets") : ["squigtoad"];
 	monster_hunting = get("monster_hunting");
-	hunt_targets = get("hunt_targets");
+	hunt_targets = get("hunt_targets");;
 	hunt_list = get("hunt_list"); //can also do frog
 }
 
 load_code("fighter default"); // standard functions and interval
 
 setInterval(function() {
+	
+	get_global_variables();
 	
 	if (event_name) {
 		return;
@@ -64,20 +63,17 @@ setInterval(function() {
 			move_to_monster();
 		}
 	}
-	
-	
 	if (state == "waiting for team") {
 		ready_check();
 		return;
 	}
-	
 	if (state == "ready") {
 		set_hunt();	
 		return;
 	}
 	
 	if(state == "meet_at_task") {
-		get_task();
+		get_task()
 		return;
 	}
 	
@@ -90,50 +86,53 @@ setInterval(function() {
 		}
 	}
 	
-	if (monster_hunting&& state != "awaiting orders") {
-		
+	if (monster_hunting && state != "awaiting orders") {
 		check_monsterhunt();
 	}
 	
 	
 	
-	check_speed();
-	
+	if(state == "town" && !is_on_cooldown("charge")) {
+		use_skill("charge");
+	}
+
 	if (character.rip || state != "attack") return;
 	
-	//check_mental_burst(); requires int64
+	attack_pattern();
+	if (group_mode) {
+		check_warcry();
+	}
+	check_taunt();
+	//check_cleave();
+	check_charge();
+	check_hardshell();
 	
-	if (state=="attack") {
-		attack_pattern();
-		if (group_mode) {
-			follow_leader();
-		}
-	}	
 	
 }, 1000 / 4); // Loops every 1/4 seconds.
 
 // Event Interval
 setInterval(function() {
 	if (!event_name)	return;
-	if (state == "moving") {
-		return;
-	}
-	follow_leader();
+	if (state == "moving") 	return;
 	attack_pattern()
 	state = "start";
 	check_events();
 }, 1000/4);
 
-function check_monsterhunt() {
+setInterval(function() {
+	send_party_invites();
+}, 60000); // Loops every minute
+
+function check_monsterhunt() { //get hunt targets as var and set targets[i] then set the localstorage
 	var no_hunt_count = 0;
 	if (character.s.monsterhunt) {
 		if (character.s.monsterhunt.c == 0) {
-		set("hunt_targets", [get("hunt_targets")[0], get("hunt_targets")[1], "completed"]);
-		} else	if (character.s.monsterhunt.id != get("hunt_targets")[2]) {
-			set("hunt_targets", [get("hunt_targets")[0], get("hunt_targets")[1], character.s.monsterhunt.id]);
+		set("hunt_targets", [get("hunt_targets")[0], "completed", get("hunt_targets")[2]]);
+		} else if (character.s.monsterhunt.id != get("hunt_targets")[1]) {
+		set("hunt_targets", [get("hunt_targets")[0], character.s.monsterhunt.id, get("hunt_targets")[2]]);
 		}
-	} else if (get("hunt_targets")[2] != "none") {
-		set("hunt_targets", [get("hunt_targets")[0], get("hunt_targets")[1], "none"]);
+	} else if (get("hunt_targets")[1] != "none") {
+		set("hunt_targets", [get("hunt_targets")[0], "none", get("hunt_targets")[2]]);
 	} for (var i in get("hunt_targets")) {
 		if (get("hunt_targets")[i] == "completed" && !smart.moving  ){
 			game_log("completed");
@@ -151,7 +150,7 @@ function check_monsterhunt() {
 			return;
 		}
 	}
-	if (no_hunt_count > 0 && !smart.moving) {
+	if (no_hunt_count > 0 && !smart.moving && state != "waiting for team") {
 		state = "start";
 		game_log(state);
 	} else if (no_hunt_count == 0) {
@@ -164,8 +163,8 @@ function check_monsterhunt() {
 
 function set_hunt() {
 	if(character.s.monsterhunt) {
-		set("hunt_targets", [get("hunt_targets")[0], get("hunt_targets")[1], character.s.monsterhunt.id]);
-	}
+		set("hunt_targets", [get("hunt_targets")[0], character.s.monsterhunt.id, get("hunt_targets")[2]]);
+	} 
 	state = "waiting for team";
 }
 
@@ -177,8 +176,8 @@ function meet_at_town(task) {
 		} if (character.s.monsterhunt) {
 			if (character.s.monsterhunt.c == 0 ) {
 				state = "meet_at_task";
-				set("hunt_targets", [get("hunt_targets")[0], get("hunt_targets")[1], "none"]);
-				} else {
+				set("hunt_targets", [get("hunt_targets")[0], "none", get("hunt_targets")[2]]);
+			} else {
 				state = "ready";
 			}
 		} else {
@@ -199,6 +198,7 @@ function ready_check() {
 
 function move_to_monster() {
 	state = "moving";
+
 	smart_move(current_monster[0]
 		, function(done) {
 			state = "attack";
@@ -206,26 +206,48 @@ function move_to_monster() {
 }
 
 function attack_pattern() {
+	
 	var target = get_targeted_monster();
 	
 	if (!target) {
 		if (group_mode) {
-			if (group_mode) {
-				if(get_player("Gibson")) {
-					target = get_target_of(get_player("Gibson"));
-					if (target) {
-						change_target(target);
-						return;
+			for(i in parent.entities) {
+				entity = parent.entities[i];
+				if (entity.target) {
+					if (PARTYARRAY.includes(entity.target) || entity.target == "Gibson") {
+						if (current_monster.includes(entity.name)) {
+							target = entity
+							change_target(target);
+							return;
+						}
 					}
 				}
 			}
-		} else {
-			for (i in current_monster){
-				target = get_nearest_monster({type: current_monster[i]});
-				if (target) {
-					change_target(target);
-					break;
+			for(i in parent.entities) {
+				entity = parent.entities[i];
+				if (special_targets.includes(entity.mtype)) {
+					change_target(entity);
+					state = "moving";
+					smart_move({x:entity.x, y:entity.y}, function (done) {
+						state = "attack";
+					});
+					return;
 				}
+			}
+		}
+		for(i in parent.entities) {
+			var entity = parent.entities[i];
+			if (special_targets.includes(entity.mtype)) {
+				change_target(entity);
+				return;
+			}
+		}
+	
+		for (i in current_monster){
+			target = get_nearest_monster({type: current_monster[i]});
+			if (target) {
+				change_target(target);
+				break;
 			}
 		}
 	} else {
@@ -233,91 +255,101 @@ function attack_pattern() {
 			log("Target Automatron found, changing targets");
 			change_target(null);
 		}
+		
 		if (!current_monster.includes(target.mtype) && !special_targets.includes(target.mtype)) {
-				change_target(null);
-				return;
-			
-		}
-		if (!is_in_range(target)) {
-			move(
-				character.x + (target.x - character.x) / 2,
-				character.y + (target.y - character.y) / 2
-			);
-			// Walk half the distance
+			change_target(null);
 		} else {
-			if (can_attack(target)) {
-				attack(target);	
-			}
-		}
-	}
-}
-
-function follow_leader() {
-	var leader = get_player("Gibson");
-		if (leader) {
-			if(get_distance_from("Gibson") > 250) {
-			state = "moving"
-			smart_move({
-				x: leader.real_x,
-				y: leader.real_y,
-				map: leader.map
-			}, function(done) {
-				state = "attack"
-			});
-		} else if (get_distance_from("Gibson") > 160) {
-			move(
-				character.x + (leader.x - character.x) / 2,
-				character.y + (leader.y - character.y) / 2
-			);
-		}
-	}
-}
-
-//requires int 64
-function check_mental_burst() {
-	if (is_on_cooldown("mentalburst") || character.mp < 180) {
-		return;	
-	}
-	var target = get_targeted_monster();
-	if (target) {
-		if(is_in_range(target,"mentalburst")) {
+			if (!is_in_range(target)) {
 				
+				if (distance(character,target) > 200) {
+					if (!smart.moving) {
+						smart_move(target);
+					}
+				} else {
+					move(
+						character.x + (target.x - character.x) / 2,
+						character.y + (target.y - character.y) / 2
+					);
+				}
+				// Walk half the distance
+			} else {
+				if (can_attack(target)) {
+					attack(target);
+				}
+			}
 		}
 	}
 }
 
-function check_speed() {
-	var gibson = get_player("Gibson");
-	var epiphone = get_player("Epiphone");
-	if (character.mp >= 320) {
-		if (gibson) {
-			if (!gibson.s.rspeed && is_in_range(gibson,"rspeed")) {
-				
-				use_skill("rspeed", gibson);
-				return;
+function check_taunt() {
+	if (group_mode) {
+			for(i in parent.entities) {
+				entity = parent.entities[i];
+				if (entity.target) {
+					if (PARTYARRAY.includes(entity.target)) {
+						if (entity.type == "monster" && !is_on_cooldown("taunt")) {
+							target = entity
+							change_target(target);
+							if (is_in_range(entity,"taunt")) {
+								use_skill("taunt",entity);
+							}
+							return;
+						}
+					}
+				}
 			}
 		}
-		if (epiphone) {
-			if (!epiphone.s.rspeed && is_in_range(epiphone,"rspeed")) {
-				use_skill("rspeed", epiphone);
-				return;
-			}
+}
+
+function send_party_invites() {
+  if(!get_party()["Draxious"]) {
+    //send_party_request("earthWar");
+  }
+  if(!get_party()["Epiphone"]) {
+    send_party_invite("Epiphone",false);
+  }
+
+  if(!get_party()["Carvin"]) {
+    send_party_invite("Carvin");
+  }
+}
+
+function check_hardshell() {
+	if (character.max_hp - character.hp > 1000 && !is_on_cooldown("hardshell")) {
+		if (character.mp > 480) {
+			use_skill("hardshell");
+		} else {
+			use("use_mp");	
 		}
-		if (!character.s.rspeed) {
-			use_skill("rspeed", character);
-			return;
+	}
+}
+
+function check_cleave() {
+	if(!is_on_cooldown("cleave") && character.mp > 720) {
+		if(can_attack(get_targeted_monster())) {
+			use_skill("cleave");	
 		}
+	}
+}
+
+function check_charge() {
+	if(!is_on_cooldown("charge")) {
+		use_skill("charge");	
+	}
+}
+
+function check_warcry() {
+	if (!is_on_cooldown("warcry")) {
+		use_skill("warcry");
 	}
 }
 
 function on_cm(name, data) {
-	if (data == "return to town") {
-		trip_to_town(false);
-		message_received = true;
-	} else if (data == "meet at task") {
+	game_log("message received");
+	if (data == "meet at task") {
 		state = "start";
-	}  else if (name == "Epiphone" && group_mode == true && get_player("Epiphone")) { 
-		cruise(get_player("Epiphone").speed);
+	} else if (name == "Epiphone" && group_mode == true && get_player("Epiphone")) { 
+		cruise(get_player("Epiphone").speed + 1);
 		state = "moving";
 		smart_move(data,function(done) {
 			state="attack";
@@ -326,10 +358,6 @@ function on_cm(name, data) {
 	}
 }
 
-character.on("stacked",function(data){
-	move(character.x - 5,character.y - 5);
-});
-	
 function check_events() {
 	if(parent.S.franky && !get_nearest_monster({type:'franky'})){
 		join('franky');
@@ -370,5 +398,4 @@ function check_events() {
 
 
 
-// Learn Javascript: https://www.codecademy.com/learn/introduction-to-javascript
-// Write your own CODE: https://github.com/kaansoral/adventureland
+

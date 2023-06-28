@@ -1,5 +1,6 @@
 
 setInterval(function() {
+
 	if (just_logged && group_mode && state == "start") {
 		send_cm(PARTYARRAY,"meet at task");
 		just_logged = false;
@@ -8,7 +9,6 @@ setInterval(function() {
 	check_pots();
 	loot();	
 	set_message(state);
-	get_global_variables();
 	
 	if (character.rip) {
 		respawn()
@@ -61,7 +61,7 @@ function trip_to_town(send_message) {
 			}
 			store_items();
 			if (group_mode) {
-				meet_at_town("normal");
+				state = "start";
 			} else {
 				smart_move({
 					x: x,
